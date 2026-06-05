@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Free Agent Class EPV</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
@@ -107,16 +108,22 @@ function fmtPct(s){if(!s||!s.trim()||s.trim()==='-'||s.trim()==='—')return'—
 function getFABadgeClass(t){if(!t)return'other';const l=t.toLowerCase();if(l.includes('restricted'))return'restricted';if(l.includes('unrestricted'))return'unrestricted';if(l.includes('player'))return'player-option';if(l.includes('team'))return'team-option';return'other';}
 function parseCSVLine(line){const r=[];let cur='',inQ=false;for(let i=0;i<line.length;i++){const c=line[i];if(inQ){if(c==='"'&&line[i+1]==='"'){cur+='"';i++;}else if(c==='"')inQ=false;else cur+=c;}else{if(c==='"')inQ=true;else if(c===','){r.push(cur);cur='';}else cur+=c;}}r.push(cur);return r;}
 
-async function init(){
+function init(){
   document.getElementById('app').innerHTML='<div class="loading"><div class="spinner"></div><p>Fetching live data&hellip;</p></div>';
   document.getElementById('controls').innerHTML='';
-  try{
-    const resp=await fetch(CSV_URL);if(!resp.ok)throw new Error('HTTP '+resp.status);
-    const text=await resp.text();if(text.trim().startsWith('<'))throw new Error('Sheet not published');
-    const lines=text.trim().split('\n');const headers=parseCSVLine(lines[0]);
-    allRows=[];for(let i=1;i<lines.length;i++){const vals=parseCSVLine(lines[i]);if(!vals[0]||!vals[0].trim())continue;const row={};headers.forEach((h,j)=>row[h.trim()]=vals[j]?.trim()||'');allRows.push(row);}
-    buildControls();render();
-  }catch(e){document.getElementById('app').innerHTML=`<div style="text-align:center;padding:60px;color:var(--bar-hot);font-family:var(--font-mono);font-size:11px;letter-spacing:2px">Error: ${e.message}<br><br>Make sure the Google Sheet is published.</div>`;}
+  Papa.parse(CSV_URL,{
+    download:true,header:true,skipEmptyLines:true,dynamicTyping:false,
+    complete(results){
+      try{
+        allRows=(results.data||[]).filter(r=>{const k=Object.keys(r);return k.some(key=>(r[key]||'').toString().trim());});
+        // Trim keys/values
+        allRows=allRows.map(r=>{const o={};Object.keys(r).forEach(k=>o[k.trim()]=(r[k]||'').toString().trim());return o;});
+        if(!allRows.length)throw new Error('No data rows');
+        buildControls();render();
+      }catch(e){document.getElementById('app').innerHTML=`<div style="text-align:center;padding:60px;color:var(--bar-hot);font-family:var(--font-mono);font-size:11px;letter-spacing:2px">Error: ${e.message}</div>`;}
+    },
+    error(e){document.getElementById('app').innerHTML=`<div style="text-align:center;padding:60px;color:var(--bar-hot);font-family:var(--font-mono);font-size:11px;letter-spacing:2px">Error: ${e.message}<br><br>Make sure the Google Sheet is published.</div>`;}
+  });
 }
 
 function buildControls(){
